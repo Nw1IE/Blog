@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Вестник IT-Студента - Редакция</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Times New Roman', Times, serif; }
+    .active { text-decoration: underline; font-weight: bold; }
+    mark { background-color: #fef08a; padding: 0 1px; color: #111827; font-style: normal; }
+    .hidden { display: none !important; }
+  </style>
+  <script type="module" src="/src/main.ts" defer></script>
+</head>
+<body class="bg-[#f4f1ea] text-gray-900 leading-relaxed max-w-4xl mx-auto p-4 md:p-8">
+
+<header id="site-header" class="border-b-4 border-gray-900 pb-4 mb-6">
+    <h1 class="text-5xl font-extrabold text-center uppercase tracking-widest mb-4 font-serif">Вестник IT-Студента</h1>
+    <nav>
+      <ul class="flex justify-center gap-6 border-y-2 border-gray-900 py-2 text-lg uppercase font-semibold font-sans">
+        <li><a href="/" class="nav-link">Главная</a></li>
+        <li><a href="/about" class="nav-link">О нас</a></li>
+        <li><a href="/contacts" class="nav-link">Контакты</a></li>
+      </ul>
+    </nav>
+    <button id="open-auth-modal" type="button" class="mt-4 w-full bg-black text-white py-4 font-black uppercase text-lg hover:bg-red-600 transition-all shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        Войти в систему
+    </button>
+</header>
+
+<!-- ЕДИНАЯ МОДАЛКА АВТОРИЗАЦИИ -->
+<section id="auth-modal" class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div class="bg-[#f4f1ea] border-4 border-black shadow-[20px_20px_0px_0px_rgba(0,0,0,1)] max-w-sm w-full p-8 font-serif relative">
+        <div class="flex justify-between items-center border-b-4 border-black pb-3 mb-6">
+            <h3 id="auth-title" class="text-2xl font-black uppercase italic tracking-tighter">Авторизация</h3>
+            <button id="close-auth-modal" class="hover:text-red-600 font-black text-2xl">×</button>
+        </div>
+        <div class="flex flex-col gap-4">
+            <input type="text" id="auth-login" placeholder="Логин" class="border-2 border-black p-3 bg-white font-bold outline-none focus:ring-2 focus:ring-yellow-400 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <input type="password" id="auth-pass" placeholder="Пароль" class="border-2 border-black p-3 bg-white font-bold outline-none focus:ring-2 focus:ring-yellow-400 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <button id="auth-submit-btn" class="bg-black text-white py-3 font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-yellow-400 hover:text-black">Войти</button>
+            <button id="toggle-auth-mode" class="text-[10px] font-black uppercase underline hover:text-red-600">Создать новый аккаунт</button>
+        </div>
+    </div>
+</section>
+
+<main>
+    <!-- Панель управления (видна только админу) -->
+    <div id="admin-panel" class="hidden mb-10 p-6 border-4 border-black bg-yellow-50 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+        <div class="flex justify-between items-center border-b-2 border-black pb-4 mb-4">
+            <h3 class="text-2xl font-black uppercase italic">Панель Редактора</h3>
+            <div class="flex gap-2">
+                <button id="open-admin-modal-btn" class="bg-black text-white px-4 py-2 text-xs font-black uppercase hover:bg-yellow-400 hover:text-black">Управление постами</button>
+                <button id="admin-logout" class="text-xs underline font-bold hover:text-red-600">Выйти</button>
+            </div>
+        </div>
+        <div id="admin-info" class="text-sm font-serif mb-4"></div>
+        <div class="grid grid-cols-2 gap-4">
+            <div class="border-2 border-black p-4 bg-white">
+                <p class="text-[10px] font-black uppercase">Статей в базе</p>
+                <span id="admin-total-posts" class="text-3xl font-black">0</span>
+            </div>
+            <div class="border-2 border-black p-4 bg-white" id="users-list-container">
+                <p class="text-[10px] font-black uppercase mb-2">Авторы:</p>
+                <div id="users-list" class="flex flex-wrap gap-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Поиск и фильтры -->
+    <section class="mb-8 border-2 border-gray-900 p-4 bg-white shadow-sm flex flex-col md:flex-row gap-4">
+        <input type="text" id="search-input" placeholder="Поиск по заголовкам..." class="flex-1 border border-gray-400 p-2 outline-none focus:border-black">
+        <select id="sort-select" class="border border-gray-400 p-2">
+            <option value="date-desc">Сначала новые</option>
+            <option value="views-desc">Популярные</option>
+        </select>
+    </section>
+
+    <section class="mb-8 flex flex-wrap gap-2 justify-center" id="category-filters"></section>
+
+    <section id="posts-container" class="grid grid-cols-1 gap-8"></section>
+</main>
+
+<!-- МОДАЛКА УПРАВЛЕНИЯ ТАБЛИЦЕЙ (Admin Dashboard) -->
+<dialog id="admin-modal" class="p-0 border-4 border-black shadow-[20px_20px_0px_0px_rgba(0,0,0,1)] max-w-4xl w-full bg-[#f4f1ea]">
+    <div class="p-6 font-serif">
+        <div class="flex justify-between items-center border-b-4 border-black pb-4 mb-6">
+            <h2 class="text-3xl font-black uppercase italic">Список публикаций</h2>
+            <button id="close-admin-modal" class="bg-black text-white px-4 py-1 uppercase font-black text-xs">Закрыть</button>
+        </div>
+        <div class="max-h-96 overflow-y-auto border-2 border-black bg-white">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-black text-white text-[10px] uppercase sticky top-0">
+                    <tr><th class="p-3">ID</th><th class="p-3">Автор</th><th class="p-3">Заголовок</th><th class="p-3 text-right">Действие</th></tr>
+                </thead>
+                <tbody id="admin-posts-table" class="text-xs"></tbody>
+            </table>
+        </div>
+    </div>
+</dialog>
+
+<footer class="mt-12 border-t-2 border-gray-400 pt-6 text-center text-sm font-bold uppercase mb-8">
+    <p id="footer-info">© 2026. Загрузка данных...</p>
+</footer>
+
+</body>
+</html>
