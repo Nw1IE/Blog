@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .hidden-el { 
+    display: none !important; 
+  }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.post-card { cursor: pointer; }
+.post-card:hover { transform: translateY(-2px); }
+
+dialog::backdrop {
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+}
