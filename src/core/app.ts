@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import type { User, Post } from '../types/types';
+=======
+import type { User } from '../types/types';
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
 import { DB } from '../data/db';
 import { logToServer } from '../api/api';
 
@@ -6,11 +10,15 @@ export class BlogApp {
     private currentUser: User | null = null;
     private isLoginMode = true;
     private currentOpenedPostId: number | null = null;
+<<<<<<< HEAD
     private selectedTag: string | null = null;
+=======
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
 
     constructor() {
         this.initEvents();
         this.renderPosts();
+<<<<<<< HEAD
         this.renderQuickTags();
         logToServer('APP_STARTED', this.currentUser, 'Клиент успешно запущен и подключен к серверу');
     }
@@ -56,11 +64,32 @@ export class BlogApp {
 
         document.getElementById('btn-open-create-post')!.addEventListener('click', () => {
             logToServer('MODAL_OPEN', this.currentUser, 'Открытие окна создания нового поста');
+=======
+        logToServer('APP_STARTED', this.currentUser, 'Клиент запущен');
+    }
+
+    private initEvents() {
+        document.getElementById('btn-open-auth')!.addEventListener('click', () => {
+            this.clearAuthError();
+            (document.getElementById('auth-modal') as HTMLDialogElement).showModal();
+        });
+        document.getElementById('close-auth-modal')!.addEventListener('click', () => (document.getElementById('auth-modal') as HTMLDialogElement).close());
+        document.getElementById('btn-logout')!.addEventListener('click', () => this.logout());
+        
+        document.getElementById('nav-profile')!.addEventListener('click', () => this.openProfile());
+        document.getElementById('close-profile-modal')!.addEventListener('click', () => (document.getElementById('profile-modal') as HTMLDialogElement).close());
+
+        document.getElementById('nav-admin')!.addEventListener('click', () => this.openAdminPanel());
+        document.getElementById('close-admin-modal')!.addEventListener('click', () => (document.getElementById('admin-modal') as HTMLDialogElement).close());
+
+        document.getElementById('btn-open-create-post')!.addEventListener('click', () => {
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             (document.getElementById('post-form') as HTMLFormElement).reset();
             (document.getElementById('edit-post-id') as HTMLInputElement).value = '';
             document.getElementById('post-modal-title')!.textContent = 'Новый пост';
             (document.getElementById('post-modal') as HTMLDialogElement).showModal();
         });
+<<<<<<< HEAD
 
         document.getElementById('close-post-modal')!.addEventListener('click', () => {
             logToServer('MODAL_CLOSE', this.currentUser, 'Закрытие модального окна создания поста');
@@ -69,6 +98,11 @@ export class BlogApp {
         
         document.getElementById('close-details-modal')!.addEventListener('click', () => {
             logToServer('MODAL_CLOSE', this.currentUser, `Закрытие просмотра поста ID: ${this.currentOpenedPostId}`);
+=======
+        document.getElementById('close-post-modal')!.addEventListener('click', () => (document.getElementById('post-modal') as HTMLDialogElement).close());
+        
+        document.getElementById('close-details-modal')!.addEventListener('click', () => {
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             this.currentOpenedPostId = null;
             (document.getElementById('post-details-modal') as HTMLDialogElement).close();
         });
@@ -76,21 +110,30 @@ export class BlogApp {
         document.getElementById('toggle-auth-mode')!.addEventListener('click', (e) => {
             e.preventDefault();
             this.isLoginMode = !this.isLoginMode;
+<<<<<<< HEAD
             logToServer('AUTH_MODE_TOGGLE', this.currentUser, `Переключение режима авторизации на: ${this.isLoginMode ? 'ВХОД' : 'РЕГИСТРАЦИЯ'}`);
             document.getElementById('auth-modal-title')!.textContent = this.isLoginMode ? 'Вход В Сеть' : 'Регистрация в Сети';
             (e.target as HTMLElement).textContent = this.isLoginMode ? 'Регистрация' : 'Уже есть аккаунт? Войти';
+=======
+            document.getElementById('auth-modal-title')!.textContent = this.isLoginMode ? 'Вход' : 'Регистрация';
+            (e.target as HTMLElement).textContent = this.isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             this.clearAuthError();
         });
 
         document.getElementById('auth-form')!.addEventListener('submit', (e) => this.handleAuthSubmit(e));
         document.getElementById('post-form')!.addEventListener('submit', (e) => this.handlePostSubmit(e));
         document.getElementById('comment-form')!.addEventListener('submit', (e) => this.handleCommentSubmit(e));
+<<<<<<< HEAD
         
         document.getElementById('search-input')!.addEventListener('input', (e) => {
             const val = (e.target as HTMLInputElement).value;
             logToServer('SEARCH_INPUT', this.currentUser, { textQuery: val });
             this.renderPosts();
         });
+=======
+        document.getElementById('search-input')!.addEventListener('input', () => this.renderPosts());
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
     }
 
     private clearAuthError() {
@@ -105,15 +148,22 @@ export class BlogApp {
         const password = (document.getElementById('auth-password') as HTMLInputElement).value.trim();
         const err = document.getElementById('auth-error')!;
 
+<<<<<<< HEAD
         logToServer('AUTH_SUBMIT_ATTEMPT', this.currentUser, { username, mode: this.isLoginMode ? 'login' : 'register' });
 
+=======
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         if (this.isLoginMode) {
             const user = DB.users.find(u => u.username === username && u.password === password);
             if (user) {
                 if (user.isBanned) {
                     err.textContent = `Аккаунт заблокирован. Причина: ${user.banReason}`;
                     err.classList.remove('hidden-el');
+<<<<<<< HEAD
                     logToServer('LOGIN_FAILED_BANNED', this.currentUser, { username, reason: user.banReason });
+=======
+                    logToServer('LOGIN_FAILED_BANNED', this.currentUser, { username });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
                     return;
                 }
                 this.login(user);
@@ -127,14 +177,23 @@ export class BlogApp {
             if (DB.users.find(u => u.username === username)) {
                 err.textContent = 'Логин уже занят!';
                 err.classList.remove('hidden-el');
+<<<<<<< HEAD
                 logToServer('REGISTER_FAILED_TAKEN', this.currentUser, { username });
+=======
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
                 return;
             }
             const newUser: User = { id: Date.now(), username, password, role: 'user', isBanned: false };
             DB.users.push(newUser);
+<<<<<<< HEAD
             logToServer('REGISTER_SUCCESS', newUser, { username });
             this.login(newUser);
             (document.getElementById('auth-modal') as HTMLDialogElement).close();
+=======
+            this.login(newUser);
+            (document.getElementById('auth-modal') as HTMLDialogElement).close();
+            logToServer('REGISTERED', this.currentUser, { username });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         }
     }
 
@@ -142,11 +201,19 @@ export class BlogApp {
         this.currentUser = user;
         this.updateUIAuth();
         this.renderPosts();
+<<<<<<< HEAD
         logToServer('LOGGED_IN', this.currentUser, { status: 'success', session_id: Date.now() });
     }
 
     private logout() {
         logToServer('LOGGED_OUT', this.currentUser, 'Пользователь вышел из аккаунта');
+=======
+        logToServer('LOGGED_IN', this.currentUser, { id: user.id });
+    }
+
+    private logout() {
+        logToServer('LOGGED_OUT', this.currentUser, { id: this.currentUser?.id });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         this.currentUser = null;
         this.updateUIAuth();
         this.renderPosts();
@@ -183,6 +250,7 @@ export class BlogApp {
         document.getElementById('profile-role')!.textContent = this.currentUser.role === 'admin' ? 'Администратор' : 'Пользователь';
         const postsCount = DB.posts.filter(p => p.authorId === this.currentUser!.id).length;
         document.getElementById('profile-stats')!.textContent = postsCount.toString();
+<<<<<<< HEAD
         
         logToServer('OPENED_PROFILE', this.currentUser, { authoredPostsCount: postsCount });
         (document.getElementById('profile-modal') as HTMLDialogElement).showModal();
@@ -222,11 +290,37 @@ export class BlogApp {
                     logToServer('POST_CARD_CLICK', this.currentUser, { postId: post.id, title: post.title });
                     this.openPostDetails(post.id);
                 }
+=======
+        logToServer('OPENED_PROFILE', this.currentUser, {});
+        (document.getElementById('profile-modal') as HTMLDialogElement).showModal();
+    }
+
+private renderPosts() {
+        const query = (document.getElementById('search-input') as HTMLInputElement).value.toLowerCase();
+        const feed = document.getElementById('posts-feed')!;
+        feed.innerHTML = '';
+
+        const filtered = DB.posts.filter(p => 
+            p.title.toLowerCase().includes(query) || p.content.toLowerCase().includes(query) || p.tags.some(t => t.toLowerCase().includes(query))
+        );
+
+        filtered.forEach(post => {
+            const isAdmin = this.currentUser?.role === 'admin';
+            const hasLiked = this.currentUser ? post.likedBy.includes(this.currentUser.id) : false;
+
+            const article = document.createElement('article');
+            article.className = 'post-card bg-white rounded-xl p-6 shadow-sm border border-slate-200 transition-shadow relative';
+            
+            article.addEventListener('click', (e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('button')) this.openPostDetails(post.id);
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             });
 
             article.innerHTML = `
                 <header class="flex justify-between items-start mb-4">
                     <section>
+<<<<<<< HEAD
                         <h3 class="text-2xl font-[950] uppercase text-white tracking-tight group-hover:text-lime-400 transition-colors">${highlightedTitle}</h3>
                         <span class="text-xs font-bold text-gray-400">Автор: <span class="text-lime-400">${post.authorName}</span></span>
                     </section>
@@ -247,12 +341,34 @@ export class BlogApp {
                     <button class="btn-like flex items-center gap-2 py-1.5 px-3 border-2 border-black bg-[#222531] text-white hover:bg-red-500/20 transition-all ${hasLiked ? '!bg-red-600/20 !text-red-400' : 'text-gray-400'}" data-id="${post.id}">
                         <svg class="w-5 h-5 ${hasLiked ? 'fill-current text-red-500' : 'none'}" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                         <span class="font-black text-sm">${post.likesCount}</span>
+=======
+                        <h3 class="text-xl font-bold text-slate-900 leading-tight">${post.title}</h3>
+                        <span class="text-sm text-slate-500 font-medium">Автор: <span class="text-indigo-600">${post.authorName}</span></span>
+                    </section>
+                    ${isAdmin ? `
+                        <section class="flex gap-2 shrink-0 ml-4">
+                            <button class="text-indigo-500 hover:text-indigo-700 text-sm font-semibold p-1 btn-edit" data-id="${post.id}">Ред.</button>
+                            <button class="text-red-500 hover:text-red-700 text-sm font-semibold p-1 btn-delete" data-id="${post.id}">Удалить</button>
+                        </section>
+                    ` : ''}
+                </header>
+                ${post.imageUrl ? `<section class="mb-4"><img src="${post.imageUrl}" class="w-full h-56 object-cover rounded-lg border border-slate-100"></section>` : ''}
+                <section class="mb-4"><p class="text-slate-600 line-clamp-3 leading-relaxed">${post.content}</p></section>
+                <section class="mb-5 flex flex-wrap gap-2">
+                    ${post.tags.map(t => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs px-2.5 py-1 rounded-md font-medium">#${t}</span>`).join('')}
+                </section>
+                <footer class="flex items-center gap-4 border-t border-slate-100 pt-4">
+                    <button class="btn-like flex items-center gap-1.5 ${hasLiked ? 'text-red-500' : 'text-slate-400 hover:text-red-400'} transition-colors" data-id="${post.id}">
+                        <svg class="w-6 h-6" fill="${hasLiked ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                        <span class="font-bold text-sm">${post.likesCount}</span>
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
                     </button>
                 </footer>
             `;
             feed.appendChild(article);
         });
 
+<<<<<<< HEAD
         feed.querySelectorAll('.btn-like').forEach(btn => btn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleLike(e);
@@ -321,6 +437,15 @@ export class BlogApp {
             logToServer('LIKE_DENIED', this.currentUser, 'Попытка поставить лайк без авторизации');
             return alert('Войдите в сеть, чтобы ставить лайки!');
         }
+=======
+        document.querySelectorAll('.btn-like').forEach(btn => btn.addEventListener('click', (e) => this.toggleLike(e)));
+        document.querySelectorAll('.btn-delete').forEach(btn => btn.addEventListener('click', (e) => this.deletePost(e)));
+        document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', (e) => this.openEditModal(e)));
+    }
+
+    private toggleLike(e: Event) {
+        if (!this.currentUser) return alert('Войдите в аккаунт, чтобы ставить лайки!');
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         const postId = parseInt((e.currentTarget as HTMLElement).dataset.id!);
         const post = DB.posts.find(p => p.id === postId);
         
@@ -329,11 +454,19 @@ export class BlogApp {
             if (hasLiked) {
                 post.likedBy = post.likedBy.filter(id => id !== this.currentUser!.id);
                 post.likesCount--;
+<<<<<<< HEAD
                 logToServer('POST_UNLIKED', this.currentUser, { postId, newLikesCount: post.likesCount });
             } else {
                 post.likedBy.push(this.currentUser.id);
                 post.likesCount++;
                 logToServer('POST_LIKED', this.currentUser, { postId, newLikesCount: post.likesCount });
+=======
+                logToServer('POST_UNLIKED', this.currentUser, { postId });
+            } else {
+                post.likedBy.push(this.currentUser.id);
+                post.likesCount++;
+                logToServer('POST_LIKED', this.currentUser, { postId });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             }
             this.renderPosts();
             if (this.currentOpenedPostId === postId) this.openPostDetails(postId); 
@@ -345,7 +478,11 @@ export class BlogApp {
         const post = DB.posts.find(p => p.id === id);
         if (!post) return;
 
+<<<<<<< HEAD
         logToServer('POST_DETAILS_OPEN', this.currentUser, { postId: id, title: post.title });
+=======
+        logToServer('OPENED_POST', this.currentUser, { postId: id });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
 
         document.getElementById('detail-title')!.textContent = post.title;
         document.getElementById('detail-author')!.textContent = `Автор: ${post.authorName}`;
@@ -381,14 +518,23 @@ export class BlogApp {
         const comments = DB.comments.filter(c => c.postId === postId);
 
         if (comments.length === 0) {
+<<<<<<< HEAD
             list.innerHTML = '<p class="text-gray-400 italic text-xs uppercase font-bold">Здесь пока нет комментариев.</p>';
+=======
+            list.innerHTML = '<p class="text-slate-400 italic text-sm">Здесь пока нет комментариев.</p>';
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             return;
         }
 
         comments.forEach(c => {
             const sec = document.createElement('section');
+<<<<<<< HEAD
             sec.className = 'bg-[#222531] p-4 border-2 border-black shadow-[2px_2px_0px_#000]';
             sec.innerHTML = `<span class="font-black text-xs text-lime-400 block mb-1 uppercase tracking-tight">${c.authorName}:</span> <span class="text-gray-200 text-sm font-medium">${c.content}</span>`;
+=======
+            sec.className = 'bg-slate-50 p-4 rounded-xl border border-slate-100';
+            sec.innerHTML = `<span class="font-bold text-sm text-indigo-600 block mb-1">${c.authorName}</span> <span class="text-slate-700">${c.content}</span>`;
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
             list.appendChild(sec);
         });
     }
@@ -402,7 +548,11 @@ export class BlogApp {
         if (!text) return;
 
         DB.comments.push({ id: Date.now(), postId: this.currentOpenedPostId, authorName: this.currentUser.username, content: text });
+<<<<<<< HEAD
         logToServer('COMMENT_ADDED', this.currentUser, { postId: this.currentOpenedPostId, textSnippet: text.substring(0, 30) });
+=======
+        logToServer('COMMENT_ADDED', this.currentUser, { postId: this.currentOpenedPostId, length: text.length });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         
         input.value = '';
         this.renderComments(this.currentOpenedPostId);
@@ -439,6 +589,7 @@ export class BlogApp {
                 post.tags = tags;
                 post.content = content;
                 if (imageUrl) post.imageUrl = imageUrl;
+<<<<<<< HEAD
                 logToServer('POST_EDIT_CONFIRMED', this.currentUser, { postId: post.id, title });
             }
         } else {
@@ -447,10 +598,20 @@ export class BlogApp {
                 id: newPostId, title, content, tags, authorId: this.currentUser.id, authorName: this.currentUser.username, likesCount: 0, likedBy: [], imageUrl: imageUrl || undefined
             });
             logToServer('POST_CREATE_SUCCESS', this.currentUser, { id: newPostId, title, tags });
+=======
+                logToServer('POST_EDITED', this.currentUser, { postId: post.id });
+            }
+        } else {
+            DB.posts.unshift({
+                id: Date.now(), title, content, tags, authorId: this.currentUser.id, authorName: this.currentUser.username, likesCount: 0, likedBy: [], imageUrl: imageUrl || undefined
+            });
+            logToServer('POST_CREATED', this.currentUser, { title });
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         }
 
         (document.getElementById('post-modal') as HTMLDialogElement).close();
         this.renderPosts();
+<<<<<<< HEAD
         this.renderQuickTags();
         
         if ((document.getElementById('admin-modal') as HTMLDialogElement).open) {
@@ -548,12 +709,20 @@ export class BlogApp {
     }
 
     private openEditModalFromAdmin(e: Event) {
+=======
+    }
+
+    private openEditModal(e: Event) {
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         const id = parseInt((e.currentTarget as HTMLElement).dataset.id!);
         const post = DB.posts.find(p => p.id === id);
         if (!post || this.currentUser?.role !== 'admin') return;
 
+<<<<<<< HEAD
         logToServer('ADMIN_EDIT_POST_INIT', this.currentUser, { postId: id, title: post.title });
 
+=======
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         (document.getElementById('edit-post-id') as HTMLInputElement).value = post.id.toString();
         (document.getElementById('post-title') as HTMLInputElement).value = post.title;
         (document.getElementById('post-tags') as HTMLInputElement).value = post.tags.join(', ');
@@ -564,13 +733,18 @@ export class BlogApp {
         (document.getElementById('post-modal') as HTMLDialogElement).showModal();
     }
 
+<<<<<<< HEAD
     private deletePostFromAdmin(e: Event) {
+=======
+    private deletePost(e: Event) {
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
         if (this.currentUser?.role !== 'admin') return;
         const id = parseInt((e.currentTarget as HTMLElement).dataset.id!);
         
         const reason = prompt('Укажите причину удаления поста:');
         if (reason !== null) {
             DB.posts = DB.posts.filter(p => p.id !== id);
+<<<<<<< HEAD
             logToServer('ADMIN_POST_DELETE', this.currentUser, { postId: id, reason: reason || 'Без причины' });
             alert(`Пост удален. Причина: ${reason || 'Без причины'}`);
             this.renderPosts();
@@ -578,4 +752,50 @@ export class BlogApp {
             this.openAdminPanel();
         }
     }
+=======
+            logToServer('POST_DELETED', this.currentUser, { postId: id, reason: reason || 'Без причины' });
+            alert(`Пост удален. Причина: ${reason || 'Без причины'}`);
+            this.renderPosts();
+        }
+    }
+
+    private openAdminPanel() {
+        if (this.currentUser?.role !== 'admin') return;
+        logToServer('OPENED_ADMIN_PANEL', this.currentUser, {});
+        
+        const list = document.getElementById('users-list')!;
+        list.innerHTML = '';
+
+        DB.users.forEach(u => {
+            if (u.role === 'admin') return;
+            const sec = document.createElement('section');
+            sec.className = 'flex justify-between items-center p-3 bg-white/50 rounded-lg border border-gray-200';
+            sec.innerHTML = `
+                <span class="font-bold">${u.username} ${u.isBanned ? '<span class="text-red-500 text-sm">(Забанен)</span>' : ''}</span>
+                <button class="btn-ban py-1 px-3 ${u.isBanned ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'} text-white rounded font-bold" data-id="${u.id}" ${u.isBanned ? 'disabled' : ''}>
+                    ${u.isBanned ? 'Забанен' : 'Забанить'}
+                </button>
+            `;
+            list.appendChild(sec);
+        });
+
+        document.querySelectorAll('.btn-ban').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = parseInt((e.currentTarget as HTMLElement).dataset.id!);
+                const reason = prompt('Укажите причину бана:');
+                if (reason !== null) {
+                    const u = DB.users.find(user => user.id === id);
+                    if (u) {
+                        u.isBanned = true;
+                        u.banReason = reason || 'Нарушение правил';
+                        logToServer('USER_BANNED', this.currentUser, { bannedId: u.id, reason: u.banReason });
+                        this.openAdminPanel();
+                    }
+                }
+            });
+        });
+
+        (document.getElementById('admin-modal') as HTMLDialogElement).showModal();
+    }
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
 }

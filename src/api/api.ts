@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 const SERVER_URL = 'http://localhost:8081';
 
 export async function logToServer(action: string, user: any, payload: any) {
@@ -30,3 +31,23 @@ export async function logToServer(action: string, user: any, payload: any) {
         console.error('%c[SERVER CONNECT ERROR] Не удалось отправить лог на бэкенд!', 'color: red; font-weight: bold;', error);
     }
 }
+=======
+import type { User } from '../types/types';
+
+export const logToServer = async (action: string, currentUser: User | null, details: any = {}) => {
+    const username = currentUser ? currentUser.username : 'Guest';
+    try {
+        await fetch('http://localhost:8080/api/client-logs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Client-Action': action,
+                'X-Client-User': username
+            },
+            body: JSON.stringify({ action, user: username, timestamp: new Date().toISOString(), details })
+        });
+    } catch (e) {
+        console.log(`[LOG_TO_SERVER] ${action}:`, details);
+    }
+};
+>>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
