@@ -2,7 +2,7 @@
 
 > Современный блог-платформа с тёмным UI в стиле neobrutalism, построенный на Vanilla TypeScript + Vite + Tailwind CSS v4. Поддерживает авторизацию через JWT, посты с изображениями, комментарии, лайки и панель администратора.
 
-<img src="./public/preview.png" alt="Описание" width="400">
+<img src="./public/preview.png" alt="preview" width="200" height="100">
 
 ---
 
