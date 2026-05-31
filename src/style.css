@@ -6,26 +6,6 @@
   }
 }
 
-<<<<<<< HEAD
-=======
-/* Кастомный скроллбар */
->>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-
-<<<<<<< HEAD
-.post-card { cursor: pointer; }
-.post-card:hover { transform: translateY(-2px); }
-
-=======
-/* Анимация карточек постов */
-.post-card { cursor: pointer; }
-.post-card:hover { transform: translateY(-2px); }
-
-/* Затемнение фона для нативных модальных окон */
->>>>>>> 9a9714a6e53131407cac6a555236384881661d4d
-dialog::backdrop {
-  background-color: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(4px);
+.post-card { 
+  cursor: pointer; 
 }
