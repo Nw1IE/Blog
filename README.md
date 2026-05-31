@@ -4,7 +4,7 @@
 <p align="center">
   <img src="./public/preview.png" alt="preview" width="600">
 </p>
----
+
 
 ## Содержание
 
