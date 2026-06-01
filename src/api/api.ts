@@ -21,6 +21,8 @@ class ApiService {
         console.groupEnd();
     }
 
+    
+
     private async request<T>(endpoint: string, method: string, body?: any): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
         const apiKey = localStorage.getItem('server_api_key') ?? '';
@@ -64,6 +66,8 @@ class ApiService {
             }
         }
 
+        
+
         const responseText = await response.text();
         let data: any;
         try { data = responseText ? JSON.parse(responseText) : null; } catch { data = responseText; }
@@ -99,10 +103,14 @@ class ApiService {
         return this.request<any>('/users', 'PUT', body);
     }
 
+    
+
     // ─── ПОСТЫ ─────────────────────────────────────────────────────────────────
     async getAllPosts(body?: Partial<GetAllPostsBody>): Promise<PostDTO[]> {
         return this.request<PostDTO[]>('/posts/getall', 'POST', body ?? {});
     }
+
+    
 
     async getPostById(id: number): Promise<PostDTO> {
         return this.request<PostDTO>(`/posts/${id}`, 'GET');
@@ -157,3 +165,4 @@ class ApiService {
 }
 
 export const api = new ApiService();
+

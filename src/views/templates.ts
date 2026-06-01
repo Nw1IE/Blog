@@ -5,8 +5,8 @@ export const getAppTemplate = (): string => `
 
         <section class="flex flex-col md:flex-row w-full h-full z-10 overflow-hidden relative">
             
-            <aside class="w-full md:w-80 flex-shrink-0 bg-[#1a1c23] border-b-4 md:border-b-0 md:border-r-4 border-black flex flex-col justify-between relative h-auto md:h-full overflow-y-auto z-20">
-                <section class="p-6">
+            <aside class="w-full md:w-80 flex-shrink-0 bg-[#1a1c23] border-b-4 md:border-b-0 md:border-r-4 border-black flex flex-col relative h-auto md:h-full overflow-y-auto z-20">
+                <section class="p-6 flex-1">
                     <header class="mb-10 relative pt-4 flex justify-center md:justify-start">
                         <h1 class="text-xl sm:text-2xl md:text-3xl font-[950] tracking-tighter text-black uppercase relative inline-block select-none py-2 px-3 bg-lime-400 border-3 border-black shadow-[4px_4px_0px_#000] break-words max-w-full text-center md:text-left transition-all duration-200 ease-out -rotate-2 hover:-rotate-1 hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[7px_7px_0px_#000] cursor-pointer">
                             Блог Геймера
@@ -34,8 +34,29 @@ export const getAppTemplate = (): string => `
                             </li>
                         </ul>
                     </nav>
+
+                    <!-- СТАТИСТИКА БЛОГА -->
+                    <section id="blog-stats-section" class="mt-8">
+                        <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">● Статистика блога</h2>
+                        <div class="grid grid-cols-3 gap-2 mb-4">
+                            <div class="bg-[#15171e] border-2 border-black p-2 text-center">
+                                <div class="text-[10px] font-bold uppercase text-gray-500 mb-1">Постов</div>
+                                <div id="stat-posts" class="text-xl font-black text-indigo-400">0</div>
+                            </div>
+                            <div class="bg-[#15171e] border-2 border-black p-2 text-center">
+                                <div class="text-[10px] font-bold uppercase text-gray-500 mb-1">Лайков</div>
+                                <div id="stat-likes" class="text-xl font-black text-red-400">0</div>
+                            </div>
+                            <div class="bg-[#15171e] border-2 border-black p-2 text-center">
+                                <div class="text-[10px] font-bold uppercase text-gray-500 mb-1">Коммент.</div>
+                                <div id="stat-comments" class="text-xl font-black text-lime-400">0</div>
+                            </div>
+                        </div>
+                        <div class="text-[10px] font-black uppercase text-gray-500 mb-2">Активность за 7 дней</div>
+                        <div id="stat-activity" class="space-y-1.5"></div>
+                    </section>
                 </section>
-                
+
                 <section id="auth-section" class="p-6 border-t-4 border-black bg-[#15171e]">
                     <button id="btn-open-auth" class="w-full py-3 px-4 bg-lime-400 text-black font-black text-lg uppercase tracking-wider border-2 border-black transition-all duration-100 hover:bg-white hover:shadow-[4px_4px_0px_#000] hover:-translate-x-1 hover:-translate-y-1">
                         Войти В Систему
@@ -49,6 +70,12 @@ export const getAppTemplate = (): string => `
                             Выйти()
                         </button>
                     </section>
+                    <footer class="mt-4 pt-3 border-t border-gray-800 text-center">
+                        <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest leading-relaxed">
+                            Жека &mdash; Сделано на микроволновке!
+                            <span class="text-red-500">♥</span>
+                        </p>
+                    </footer>
                 </section>
             </aside>
 
@@ -61,6 +88,7 @@ export const getAppTemplate = (): string => `
                             </div>
                             <input type="text" id="search-input" placeholder="Поиск По Базе" class="w-full py-3 pl-12 pr-4 bg-[#222531] border-2 border-black text-base focus:bg-[#2c2f3f] focus:outline-none focus:shadow-[4px_4px_0px_#bef264] transition-all text-white placeholder-gray-500 font-bold">
                         </div>
+                        <!-- Теги-фильтры (категории) -->
                         <section id="quick-tags-container" class="mt-3 flex flex-wrap gap-1.5"></section>
                     </section>
                     <button id="btn-open-create-post" class="hidden-el py-3 px-6 bg-lime-400 hover:bg-white text-black font-black text-base uppercase tracking-tight border-2 border-black transition-all whitespace-nowrap hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5">
@@ -116,17 +144,30 @@ export const getAppTemplate = (): string => `
                 <input type="hidden" id="edit-post-id">
                 <input type="text" id="post-title" placeholder="Заголовок поста" required class="p-3 bg-[#222531] border-2 border-black focus:outline-none focus:shadow-[4px_4px_0px_#bef264] text-white font-bold">
                 <textarea id="post-content" placeholder="Текст поста" rows="5" required class="p-3 bg-[#222531] border-2 border-black focus:outline-none focus:shadow-[4px_4px_0px_#bef264] text-white font-medium resize-none"></textarea>
-                
-                <!-- Загрузка картинки -->
+
+                <!-- КАТЕГОРИЯ + ТЕГИ -->
+                <section class="space-y-2">
+                    <label class="text-xs text-gray-400 font-bold uppercase block">Категория / Тег</label>
+                    <input
+                        type="text"
+                        id="post-category"
+                        placeholder="Введи или выбери тег ниже"
+                        list="categories-datalist"
+                        autocomplete="off"
+                        class="w-full p-3 bg-[#222531] border-2 border-black focus:outline-none focus:shadow-[4px_4px_0px_#bef264] text-white font-medium"
+                    >
+                    <datalist id="categories-datalist"></datalist>
+                    <!-- Кнопки существующих тегов -->
+                    <div id="tag-selector" class="flex flex-wrap gap-1.5 mt-1"></div>
+                </section>
+
                 <section class="border-2 border-dashed border-gray-600 p-3 bg-[#15171e] space-y-2">
                     <label class="text-xs text-gray-400 font-bold uppercase block">Картинка поста (необязательно)</label>
                     <input type="file" id="post-image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:border-2 file:border-black file:bg-lime-400 file:text-black file:font-bold hover:file:bg-white cursor-pointer">
-                    <!-- Превью -->
                     <section id="image-preview-container" class="hidden-el mt-2">
                         <img id="image-preview" src="" alt="preview" class="w-full max-h-48 object-cover border-2 border-black" />
                     </section>
                 </section>
-
                 <button type="submit" class="py-3 bg-lime-400 text-black font-black text-lg uppercase border-2 border-black transition-all hover:bg-white hover:shadow-[4px_4px_0px_#000] hover:-translate-x-0.5 hover:-translate-y-0.5">ОПУБЛИКОВАТЬ В СЕТЬ</button>
             </form>
         </dialog>
@@ -142,12 +183,10 @@ export const getAppTemplate = (): string => `
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </header>
-            <!-- Картинка в деталях -->
             <section id="detail-image-container" class="hidden-el w-full overflow-hidden border-2 border-black mb-6">
                 <img id="detail-image" src="" alt="post image" class="w-full max-h-96 object-cover" />
             </section>
             <article id="detail-content" class="text-base text-gray-200 whitespace-pre-wrap mb-6 leading-relaxed bg-[#15171e] p-4 border-2 border-black"></article>
-            
             <section class="border-t-2 border-black pt-6">
                 <h3 class="text-xl font-black uppercase mb-4 text-lime-400">Комментарии</h3>
                 <section id="comments-list" class="space-y-3 mb-6"></section>

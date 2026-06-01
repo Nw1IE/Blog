@@ -1,11 +1,9 @@
-import { DB } from '../data/db';
+import { DB, saveRegisteredUser } from '../data/db';
 import { api } from '../api/api.ts';
 import type { UserDTO, PostDTO, CommentDTO } from '../types/types.ts';
 
-// Ключ для хранения удалённых постов между сессиями
 const DELETED_POSTS_KEY = 'blog_deleted_post_ids';
-// Ключ для хранения imageUrl постов (сервер не хранит, храним локально)
-const IMAGE_STORE_KEY = 'blog_post_images';
+const IMAGE_STORE_KEY   = 'blog_post_images';
 
 function getDeletedIds(): Set<number> {
     try {
@@ -13,38 +11,27 @@ function getDeletedIds(): Set<number> {
         return raw ? new Set(JSON.parse(raw) as number[]) : new Set();
     } catch { return new Set(); }
 }
-
 function saveDeletedIds(ids: Set<number>) {
     localStorage.setItem(DELETED_POSTS_KEY, JSON.stringify([...ids]));
 }
-
-/** Хранилище base64-картинок постов: { postId: dataUrl } */
 function getImageStore(): Record<number, string> {
     try {
         const raw = localStorage.getItem(IMAGE_STORE_KEY);
         return raw ? JSON.parse(raw) : {};
     } catch { return {}; }
 }
-
 function saveImageStore(store: Record<number, string>) {
-    try {
-        localStorage.setItem(IMAGE_STORE_KEY, JSON.stringify(store));
-    } catch (e) {
-        // localStorage может переполниться при большом кол-ве base64 — молча игнорируем
-        console.warn('⚠️ Не удалось сохранить картинки в localStorage:', e);
-    }
+    try { localStorage.setItem(IMAGE_STORE_KEY, JSON.stringify(store)); }
+    catch (e) { console.warn('⚠️ Не удалось сохранить картинки:', e); }
 }
-
 function getImageForPost(postId: number): string | null {
     return getImageStore()[postId] ?? null;
 }
-
 function saveImageForPost(postId: number, dataUrl: string) {
     const store = getImageStore();
     store[postId] = dataUrl;
     saveImageStore(store);
 }
-
 function removeImageForPost(postId: number) {
     const store = getImageStore();
     delete store[postId];
@@ -61,20 +48,16 @@ export class BlogApp {
     private likedPostIds: Set<number> = new Set();
     private deletedPostIds: Set<number> = getDeletedIds();
 
-    constructor() {
-        this.init();
-    }
+    constructor() { this.init(); }
 
     public async init() {
         if (this.isInitialized) return;
         this.isInitialized = true;
 
-        // ШАГ 1: API-ключ
         if (!localStorage.getItem('server_api_key')) {
             try { await api.createApiKey(); } catch (e) { console.error('❌ API ключ:', e); }
         }
 
-        // ШАГ 2: Восстанавливаем сессию
         const savedJwt   = localStorage.getItem('app_jwt_token');
         const savedLogin = localStorage.getItem('current_login');
         const savedRole  = (localStorage.getItem('current_role') as 'admin' | 'user') || 'user';
@@ -87,21 +70,67 @@ export class BlogApp {
                     username: savedLogin,
                     role: savedRole,
                     isBanned: false,
-                    email: `${savedLogin}@mail.ru`,
+                    email: localUser?.email ?? `${savedLogin}@mail.ru`,
                     bio: localUser?.bio ?? ''
                 };
                 this.updateUIAuth();
             }
         }
 
-        // ШАГ 3: Данные
         await this.loadPostsFromServer();
         await this.loadCategories();
-
-        // ШАГ 4: Рендер
         this.renderPosts();
         this.renderCategories();
         this.initEvents();
+    }
+
+    // ─── СТАТИСТИКА ──────────────────────────────────────────────────────────
+
+    private updateBlogStats() {
+        const posts = DB.posts;
+        const totalPosts    = posts.length;
+        const totalLikes    = posts.reduce((s, p) => s + (p.likesCount ?? 0), 0);
+        const totalComments = posts.reduce((s, p) => s + (p.comments?.length ?? 0), 0);
+
+        const el = (id: string) => document.getElementById(id);
+        if (el('stat-posts'))    el('stat-posts')!.textContent    = String(totalPosts);
+        if (el('stat-likes'))    el('stat-likes')!.textContent    = String(totalLikes);
+        if (el('stat-comments')) el('stat-comments')!.textContent = String(totalComments);
+
+        const container = el('stat-activity');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const dayLabels = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+        const counts: number[] = Array(7).fill(0);
+        const now = new Date();
+
+        posts.forEach(p => {
+            if (!p.createdAt) return;
+            const created  = new Date(p.createdAt);
+            const diffDays = Math.floor((now.getTime() - created.getTime()) / 86400000);
+            if (diffDays >= 0 && diffDays < 7) counts[6 - diffDays]++;
+        });
+
+        const maxCount = Math.max(...counts, 1);
+
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(now);
+            date.setDate(date.getDate() - (6 - i));
+            const label = dayLabels[date.getDay()];
+            const pct   = Math.round((counts[i] / maxCount) * 100);
+
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2';
+            row.innerHTML = `
+                <span class="text-[10px] font-bold text-gray-500 w-5 shrink-0">${label}</span>
+                <div class="flex-1 bg-[#15171e] border border-black h-4 overflow-hidden">
+                    <div class="h-full bg-lime-400 transition-all duration-300" style="width:${pct}%"></div>
+                </div>
+                <span class="text-[10px] font-bold text-gray-400 w-3 text-right">${counts[i]}</span>
+            `;
+            container.appendChild(row);
+        }
     }
 
     // ─── ЗАГРУЗКА ДАННЫХ ─────────────────────────────────────────────────────
@@ -109,26 +138,67 @@ export class BlogApp {
     private async loadPostsFromServer() {
         try {
             const posts = await api.getAllPosts({ page: 1, limit: 50 });
+
             DB.posts = posts
                 .filter(p => !this.deletedPostIds.has(p.id))
-                .map(p => ({
-                    ...p,
-                    comments:     p.comments    ?? [],
-                    likesCount:   p.likesCount  ?? 0,
-                    categoryName: p.categoryName ?? null,
-                    // Подтягиваем сохранённую картинку из localStorage
-                    imageUrl: p.imageUrl ?? getImageForPost(p.id) ?? null,
-                }));
-            console.log(`✅ Загружено ${DB.posts.length} постов с сервера`);
+                .map(p => {
+                    const raw = p as any;
+                    const authorLogin =
+                        p.authorLogin || raw.author || raw.authorName || raw.login ||
+                        raw.username  || raw.user?.login || raw.user?.username ||
+                        raw.user?.name || 'Аноним';
+
+                    let comments: any[] = [];
+                    if (Array.isArray(p.comments)) comments = p.comments;
+                    else if (Array.isArray(raw.commentsList)) comments = raw.commentsList;
+                    const commentsCount = raw.commentsCount ?? raw.commentCount ?? raw.comments_count ?? null;
+                    if (comments.length === 0 && typeof commentsCount === 'number' && commentsCount > 0) {
+                        comments = Array(commentsCount).fill({ id: 0, content: '', authorLogin: '' });
+                    }
+
+                    return {
+                        ...p,
+                        authorLogin,
+                        comments,
+                        likesCount:   p.likesCount   ?? 0,
+                        categoryName: p.categoryName ?? null,
+                        imageUrl:     p.imageUrl     ?? getImageForPost(p.id) ?? null,
+                    };
+                });
+
+            this.updateBlogStats();
+            this.fillMissingAuthors();
         } catch (e) {
             console.warn('⚠️ Не удалось загрузить посты:', e);
         }
     }
 
+    private async fillMissingAuthors() {
+        const postsWithoutAuthor = DB.posts.filter(p => !p.authorLogin || p.authorLogin === 'Аноним');
+        if (postsWithoutAuthor.length === 0) return;
+
+        await Promise.allSettled(postsWithoutAuthor.slice(0, 10).map(async (post) => {
+            try {
+                const fresh = await api.getPostById(post.id);
+                const raw = fresh as any;
+                const authorLogin =
+                    fresh.authorLogin || raw.author || raw.authorName || raw.login ||
+                    raw.username || raw.user?.login || raw.user?.username || raw.user?.name;
+                if (authorLogin && authorLogin !== 'Аноним') {
+                    const idx = DB.posts.findIndex(p => p.id === post.id);
+                    if (idx !== -1) {
+                        DB.posts[idx].authorLogin = authorLogin;
+                        const articleAuthor = document.querySelector(`article[data-post-id="${post.id}"] .text-lime-400`);
+                        if (articleAuthor) articleAuthor.textContent = authorLogin;
+                    }
+                }
+            } catch { /* игнорируем */ }
+        }));
+    }
+
     private async loadCategories() {
         try {
             this.categories = await api.getCategories();
-            console.log('✅ Категории:', this.categories);
         } catch {
             console.warn('⚠️ Не удалось загрузить категории');
         }
@@ -165,6 +235,8 @@ export class BlogApp {
             const t = document.getElementById('post-modal-title');
             if (t) t.textContent = 'Новый пост';
             this.clearImagePreview();
+            this.fillCategoryDatalist();
+            this.renderTagSelector();
             (document.getElementById('post-modal') as HTMLDialogElement).showModal();
         });
         document.getElementById('close-post-modal')?.addEventListener('click', () =>
@@ -182,12 +254,11 @@ export class BlogApp {
             this.clearAuthError();
         });
 
-        document.getElementById('auth-form')?.addEventListener('submit', (e) => this.handleAuthSubmit(e));
-        document.getElementById('post-form')?.addEventListener('submit', (e) => this.handlePostSubmit(e));
+        document.getElementById('auth-form')?.addEventListener('submit',    (e) => this.handleAuthSubmit(e));
+        document.getElementById('post-form')?.addEventListener('submit',    (e) => this.handlePostSubmit(e));
         document.getElementById('comment-form')?.addEventListener('submit', (e) => this.handleCommentSubmit(e));
-        document.getElementById('search-input')?.addEventListener('input', () => this.renderPosts());
+        document.getElementById('search-input')?.addEventListener('input',  () => this.renderPosts());
 
-        // Превью картинки при выборе файла
         document.getElementById('post-image')?.addEventListener('change', (e) => {
             const file = (e.target as HTMLInputElement).files?.[0];
             if (file) this.showImagePreview(file);
@@ -195,21 +266,72 @@ export class BlogApp {
         });
     }
 
+    // ─── ТЕГИ / КАТЕГОРИИ ────────────────────────────────────────────────────
+
+    /** Возвращает список всех уникальных категорий (с сервера + из постов) */
+    private getAllCategories(): string[] {
+        const serverCats = this.categories.map(c => c.name || c.title).filter(Boolean);
+        const localCats  = DB.posts.map(p => p.categoryName).filter((c): c is string => !!c);
+        return [...new Set([...serverCats, ...localCats])];
+    }
+
+    private fillCategoryDatalist() {
+        const dl = document.getElementById('categories-datalist');
+        if (!dl) return;
+        dl.innerHTML = '';
+        this.getAllCategories().forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            dl.appendChild(opt);
+        });
+    }
+
+    /**
+     * Рендерит кнопки-теги под полем категории в модалке создания/редактирования поста.
+     * Клик по тегу — вставляет значение в инпут.
+     */
+    private renderTagSelector() {
+        const container = document.getElementById('tag-selector');
+        if (!container) return;
+        container.innerHTML = '';
+        const cats = this.getAllCategories();
+        if (cats.length === 0) return;
+
+        cats.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-[10px] font-black uppercase px-2 py-1 border border-black bg-[#15171e] text-gray-400 hover:bg-lime-400 hover:text-black transition-all';
+            btn.textContent = cat;
+            btn.addEventListener('click', () => {
+                const input = document.getElementById('post-category') as HTMLInputElement;
+                if (input) {
+                    input.value = input.value === cat ? '' : cat;
+                    // подсвечиваем выбранный
+                    container.querySelectorAll('button').forEach(b =>
+                        b.classList.toggle('bg-lime-400', b.textContent === input.value)
+                    );
+                    container.querySelectorAll('button').forEach(b =>
+                        b.classList.toggle('text-black', b.textContent === input.value)
+                    );
+                }
+            });
+            container.appendChild(btn);
+        });
+    }
+
     private showImagePreview(file: File) {
-        const preview = document.getElementById('image-preview') as HTMLImageElement | null;
+        const preview   = document.getElementById('image-preview') as HTMLImageElement | null;
         const container = document.getElementById('image-preview-container');
         if (!preview || !container) return;
         preview.src = URL.createObjectURL(file);
         container.classList.remove('hidden-el');
     }
-
     private clearImagePreview() {
-        const preview = document.getElementById('image-preview') as HTMLImageElement | null;
+        const preview   = document.getElementById('image-preview') as HTMLImageElement | null;
         const container = document.getElementById('image-preview-container');
         if (preview) preview.src = '';
         container?.classList.add('hidden-el');
     }
-
     private clearAuthError() {
         const err = document.getElementById('auth-error');
         if (err) { err.classList.add('hidden-el'); err.textContent = ''; }
@@ -241,27 +363,37 @@ export class BlogApp {
 
                 const localUser = DB.users.find(u => u.username === username);
                 await this.login({
-                    id: localUser?.id ?? 1,
+                    id: localUser?.id ?? Date.now(),
                     username,
                     role,
                     isBanned: false,
-                    email: `${username}@mail.ru`,
+                    email: localUser?.email ?? `${username}@mail.ru`,
                     bio: localUser?.bio ?? ''
                 });
                 (document.getElementById('auth-modal') as HTMLDialogElement).close();
             } else {
+                // ─── РЕГИСТРАЦИЯ ───────────────────────────────────────────
                 await api.registerUser({
                     login: username,
                     password,
                     email: `${username}@mail.ru`,
                     bio: 'Новый пользователь'
                 });
-                if (!DB.users.find(u => u.username === username)) {
-                    DB.users.push({ id: DB.users.length + 1, username, role: 'user', isBanned: false, email: `${username}@mail.ru`, bio: 'Новый пользователь' });
-                }
+
+                // Сохраняем нового пользователя в DB + localStorage
+                const newUser: UserDTO = {
+                    id: Date.now(),
+                    username,
+                    role: 'user',
+                    isBanned: false,
+                    email: `${username}@mail.ru`,
+                    bio: 'Новый пользователь'
+                };
+                saveRegisteredUser(newUser);
+
                 alert('✅ Регистрация успешна! Теперь войдите.');
                 this.isLoginMode = true;
-                const t = document.getElementById('auth-modal-title');
+                const t  = document.getElementById('auth-modal-title');
                 if (t) t.textContent = 'Вход В Сеть';
                 const tb = document.getElementById('toggle-auth-mode');
                 if (tb) tb.textContent = 'Регистрация';
@@ -279,13 +411,12 @@ export class BlogApp {
         await this.loadCategories();
         this.renderPosts();
         this.renderCategories();
-        // Обновляем счётчик постов в профиле сразу после входа
         this.updateProfileStats();
     }
 
     private logout() {
         this.currentUser = null;
-        this.categories = [];
+        this.categories  = [];
         this.likedPostIds.clear();
         localStorage.removeItem('app_jwt_token');
         localStorage.removeItem('current_login');
@@ -300,7 +431,7 @@ export class BlogApp {
         const btnAuth       = document.getElementById('btn-open-auth');
         const userInfo      = document.getElementById('user-info');
         const navProfile    = document.getElementById('nav-profile-container') || document.getElementById('nav-profile');
-        const navAdmin      = document.getElementById('nav-admin-container') || document.getElementById('nav-admin');
+        const navAdmin      = document.getElementById('nav-admin-container')   || document.getElementById('nav-admin');
         const btnCreatePost = document.getElementById('btn-open-create-post');
 
         if (this.currentUser) {
@@ -320,7 +451,6 @@ export class BlogApp {
         }
     }
 
-    /** Обновляет счётчик постов прямо в DOM профиля (без открытия модалки) */
     private updateProfileStats() {
         const s = document.getElementById('profile-stats');
         if (s && this.currentUser) {
@@ -335,7 +465,6 @@ export class BlogApp {
         const s = document.getElementById('profile-stats');
         if (u) u.textContent = this.currentUser.username;
         if (r) r.textContent = this.currentUser.role === 'admin' ? 'Администратор' : 'Пользователь';
-        // Считаем актуально в момент открытия
         if (s) s.textContent = DB.posts.filter(p => p.authorLogin === this.currentUser!.username).length.toString();
         (document.getElementById('profile-modal') as HTMLDialogElement).showModal();
     }
@@ -353,6 +482,8 @@ export class BlogApp {
         const list = document.getElementById('users-list');
         if (!list) return;
         list.innerHTML = '';
+
+        // DB.users теперь содержит и зарегистрированных через сайт пользователей
         DB.users.forEach((user: UserDTO) => {
             const isSelf = user.username === this.currentUser?.username;
             const div = document.createElement('div');
@@ -364,12 +495,13 @@ export class BlogApp {
                     ${user.isBanned ? `<span class="ml-2 text-[10px] font-bold text-red-400 uppercase">ЗАБАНЕН${user.banReason ? ': ' + user.banReason : ''}</span>` : ''}
                 </section>
                 ${!isSelf ? `
-                <button class="btn-ban text-[11px] font-black px-2 py-1 border-2 border-black ${user.isBanned ? 'bg-lime-400 text-black' : 'bg-red-500 text-white'}" data-username="${user.username}">
+                <button type="button" class="btn-ban text-[11px] font-black px-2 py-1 border-2 border-black ${user.isBanned ? 'bg-lime-400 text-black' : 'bg-red-500 text-white'}" data-username="${user.username}">
                     ${user.isBanned ? 'РАЗБАНИТЬ' : 'ЗАБАНИТЬ'}
                 </button>` : '<span class="text-[10px] text-gray-500 font-bold">ВЫ</span>'}
             `;
             list.appendChild(div);
         });
+
         list.querySelectorAll('.btn-ban').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const username = (e.currentTarget as HTMLElement).dataset.username!;
@@ -384,13 +516,11 @@ export class BlogApp {
         if (!user.isBanned) {
             const reason = prompt(`Причина блокировки "${username}":`);
             if (reason === null) return;
-            user.isBanned = true;
-            user.banReason = reason || 'Нарушение правил';
-            // Вызов API бана
-            const userId = user.id;
-            api.banUser(userId, user.banReason).catch(err => console.warn('ban API:', err));
+            user.isBanned   = true;
+            user.banReason  = reason || 'Нарушение правил';
+            api.banUser(user.id, user.banReason).catch(err => console.warn('ban API:', err));
         } else {
-            user.isBanned = false;
+            user.isBanned  = false;
             user.banReason = undefined;
         }
         this.renderAdminUsers();
@@ -415,13 +545,14 @@ export class BlogApp {
                         <p class="text-[10px] text-gray-400 font-bold">Автор: <span class="text-lime-400">${post.authorLogin}</span> · 👍 ${post.likesCount ?? 0} · 💬 ${post.comments?.length ?? 0}</p>
                     </section>
                     <section class="flex gap-1.5 shrink-0">
-                        <button class="btn-admin-edit text-[11px] font-black px-2 py-1 border-2 border-black bg-indigo-500 text-white" data-id="${post.id}">РЕД.</button>
-                        <button class="btn-admin-delete text-[11px] font-black px-2 py-1 border-2 border-black bg-red-500 text-white" data-id="${post.id}">УДАЛИТЬ</button>
+                        <button type="button" class="btn-admin-edit text-[11px] font-black px-2 py-1 border-2 border-black bg-indigo-500 text-white" data-id="${post.id}">РЕД.</button>
+                        <button type="button" class="btn-admin-delete text-[11px] font-black px-2 py-1 border-2 border-black bg-red-500 text-white" data-id="${post.id}">УДАЛИТЬ</button>
                     </section>
                 </section>
             `;
             list.appendChild(div);
         });
+
         list.querySelectorAll('.btn-admin-delete').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = parseInt((e.currentTarget as HTMLElement).dataset.id!);
@@ -430,33 +561,36 @@ export class BlogApp {
                     await api.deletePost(id);
                     this.markPostDeleted(id);
                     this.renderAdminPosts();
-                    this.renderPosts();
+                    document.querySelector(`article[data-post-id="${id}"]`)?.remove();
+                    this.updateBlogStats();
                     this.updateProfileStats();
                 } catch (err: any) { alert(`Ошибка: ${err.message}`); }
             });
         });
+
         list.querySelectorAll('.btn-admin-edit').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const id = parseInt((e.currentTarget as HTMLElement).dataset.id!);
+                const id   = parseInt((e.currentTarget as HTMLElement).dataset.id!);
                 const post = DB.posts.find(p => p.id === id);
                 if (!post) return;
                 (document.getElementById('admin-modal') as HTMLDialogElement).close();
-                (document.getElementById('edit-post-id') as HTMLInputElement).value = id.toString();
-                (document.getElementById('post-title') as HTMLInputElement).value = post.title || '';
+                (document.getElementById('edit-post-id') as HTMLInputElement).value    = id.toString();
+                (document.getElementById('post-title') as HTMLInputElement).value      = post.title || '';
                 (document.getElementById('post-content') as HTMLTextAreaElement).value = post.content || '';
+                const catInput = document.getElementById('post-category') as HTMLInputElement;
+                if (catInput) catInput.value = post.categoryName || '';
                 const t = document.getElementById('post-modal-title');
                 if (t) t.textContent = 'Редактировать пост';
-                // Если у поста есть картинка — показываем превью
                 if (post.imageUrl) {
-                    const preview = document.getElementById('image-preview') as HTMLImageElement | null;
+                    const preview   = document.getElementById('image-preview') as HTMLImageElement | null;
                     const container = document.getElementById('image-preview-container');
                     if (preview && container) {
                         preview.src = post.imageUrl;
                         container.classList.remove('hidden-el');
                     }
-                } else {
-                    this.clearImagePreview();
-                }
+                } else { this.clearImagePreview(); }
+                this.fillCategoryDatalist();
+                this.renderTagSelector();
                 (document.getElementById('post-modal') as HTMLDialogElement).showModal();
             });
         });
@@ -467,7 +601,7 @@ export class BlogApp {
     private renderPosts() {
         const searchInput = document.getElementById('search-input') as HTMLInputElement;
         const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        const feed = document.getElementById('posts-feed');
+        const feed  = document.getElementById('posts-feed');
         if (!feed) return;
         const isAdmin = this.currentUser?.role === 'admin';
         feed.innerHTML = '';
@@ -495,11 +629,10 @@ export class BlogApp {
                 );
             }
 
-            const isLiked = this.likedPostIds.has(post.id);
-            // Счётчик комментов: если сервер вернул массив — берём длину, иначе 0
-            const commentsCount = Array.isArray(post.comments) ? post.comments.length : 0;
+            const isLiked       = this.likedPostIds.has(post.id);
+            const commentsCount = Array.isArray(post.comments) ? post.comments.length : (post as any).commentsCount ?? 0;
 
-            const article = document.createElement('article');
+            const article     = document.createElement('article');
             article.className = 'w-full bg-[#1a1c23] border-3 border-black text-white p-6 shadow-[6px_6px_0px_#000] hover:shadow-[8px_8px_0px_#bef264] transition-all duration-150 cursor-pointer group';
             article.dataset.postId = String(post.id);
 
@@ -526,14 +659,14 @@ export class BlogApp {
                     </section>
                     ${isAdmin ? `
                         <section class="flex gap-2 shrink-0 ml-4">
-                            <button class="text-indigo-400 hover:text-indigo-300 text-sm font-semibold p-1 btn-edit" data-id="${post.id}">Ред.</button>
-                            <button class="text-red-500 hover:text-red-300 text-sm font-semibold p-1 btn-delete" data-id="${post.id}">Удалить</button>
+                            <button type="button" class="text-indigo-400 hover:text-indigo-300 text-sm font-semibold p-1 btn-edit" data-id="${post.id}">Ред.</button>
+                            <button type="button" class="text-red-500 hover:text-red-300 text-sm font-semibold p-1 btn-delete" data-id="${post.id}">Удалить</button>
                         </section>` : ''}
                 </header>
                 ${categoryBadgeHtml}
                 <section class="mb-4"><p class="text-gray-300 line-clamp-3 leading-relaxed text-sm font-medium">${post.content || ''}</p></section>
                 <footer class="flex items-center gap-4 border-t border-black pt-4">
-                    <button class="btn-like flex items-center gap-2 py-1.5 px-3 border-2 border-black transition-all ${
+                    <button type="button" class="btn-like flex items-center gap-2 py-1.5 px-3 border-2 border-black transition-all ${
                         isLiked ? 'bg-red-500/30 border-red-500 text-red-400' : 'bg-[#222531] text-gray-400 hover:bg-red-500/20'
                     }" data-id="${post.id}">
                         <svg class="w-5 h-5 ${isLiked ? 'fill-red-500 stroke-red-500' : 'fill-none stroke-current'}" stroke-width="2.5" viewBox="0 0 24 24">
@@ -545,31 +678,28 @@ export class BlogApp {
                 </footer>
             `;
 
-            // Картинку вставляем через DOM (не через innerHTML) чтобы base64 не ломался
             if (post.imageUrl) {
-                const img = document.createElement('img');
-                img.src = post.imageUrl.startsWith('data:')
-                    ? post.imageUrl
-                    : 'http://localhost:8083' + post.imageUrl;
-                img.alt = 'post image';
+                const img   = document.createElement('img');
+                img.src     = post.imageUrl.startsWith('data:') ? post.imageUrl : 'http://localhost:8083' + post.imageUrl;
+                img.alt     = 'post image';
                 img.className = 'w-full h-52 object-cover mb-4 border-2 border-black';
-                // Вставляем картинку перед categoryBadgeHtml секцией или перед контентом
                 const contentSection = article.querySelector('section.mb-4');
-                if (contentSection) {
-                    article.insertBefore(img, contentSection);
-                } else {
-                    article.appendChild(img);
-                }
+                if (contentSection) article.insertBefore(img, contentSection);
+                else article.appendChild(img);
             }
 
             feed.appendChild(article);
         });
 
-        // Лайки
-        feed.querySelectorAll('.btn-like').forEach(btn =>
-            btn.addEventListener('click', (e) => { e.stopPropagation(); this.toggleLike(e); }));
+        this.updateBlogStats();
 
-        // Удаление / редактирование (admin)
+        feed.querySelectorAll('.btn-like').forEach(btn =>
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleLike(e);
+            }));
+
         if (isAdmin) {
             feed.querySelectorAll('.btn-delete').forEach(btn =>
                 btn.addEventListener('click', (e) => { e.stopPropagation(); this.deletePost(e); }));
@@ -577,7 +707,6 @@ export class BlogApp {
                 btn.addEventListener('click', (e) => { e.stopPropagation(); this.openEditModal(e); }));
         }
 
-        // Категории-бейджи
         feed.querySelectorAll('.category-badge').forEach(badge =>
             badge.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -593,9 +722,7 @@ export class BlogApp {
         if (!container) return;
         container.innerHTML = '';
 
-        const localCats  = DB.posts.map(p => p.categoryName).filter((c): c is string => !!c);
-        const serverCats = this.categories.map(c => c.name || c.title).filter(Boolean);
-        const unique = [...new Set([...serverCats, ...localCats])];
+        const unique = this.getAllCategories();
 
         if (unique.length === 0) {
             container.innerHTML = '<span class="text-[10px] text-gray-500 font-bold uppercase">Войдите чтобы увидеть категории</span>';
@@ -604,8 +731,11 @@ export class BlogApp {
         unique.forEach((cat: string) => {
             const isSelected = this.selectedCategory?.toLowerCase() === cat.toLowerCase();
             const btn = document.createElement('button');
+            btn.type      = 'button';
             btn.className = `text-[10px] font-black uppercase px-2 py-1 border transition-all ${
-                isSelected ? 'bg-lime-400 text-black border-black shadow-[2px_2px_0px_#000]' : 'bg-[#1a1c23] text-gray-400 border-gray-800 hover:border-black hover:text-white'
+                isSelected
+                    ? 'bg-lime-400 text-black border-black shadow-[2px_2px_0px_#000]'
+                    : 'bg-[#1a1c23] text-gray-400 border-gray-800 hover:border-black hover:text-white'
             }`;
             btn.textContent = cat;
             btn.addEventListener('click', () => {
@@ -617,41 +747,64 @@ export class BlogApp {
         });
     }
 
-    // ─── ЛАЙКИ ───────────────────────────────────────────────────────────────
+    // ─── ЛАЙКИ (БЕЗ ПЕРЕЗАГРУЗКИ ЛЕНТЫ) ─────────────────────────────────────
 
     private async toggleLike(e: Event) {
         if (!this.currentUser) { alert('Войдите, чтобы ставить лайки!'); return; }
-        const btn = e.currentTarget as HTMLElement;
+        const btn    = e.currentTarget as HTMLElement;
         const postId = parseInt(btn.dataset.id!);
-        const post = DB.posts.find(p => p.id === postId);
+        const post   = DB.posts.find(p => p.id === postId);
         if (!post) return;
 
-        try {
-            const result = await api.toggleLike(postId);
-            const newCount = parseInt(result);
-            post.likesCount = isNaN(newCount) ? (post.likesCount ?? 0) + 1 : newCount;
+        // Оптимистичное обновление — только кнопку, без renderPosts()
+        const wasLiked        = this.likedPostIds.has(postId);
+        const optimisticCount = wasLiked
+            ? Math.max(0, (post.likesCount ?? 0) - 1)
+            : (post.likesCount ?? 0) + 1;
 
-            if (this.likedPostIds.has(postId)) {
-                this.likedPostIds.delete(postId);
-            } else {
-                this.likedPostIds.add(postId);
-            }
+        this.updateLikeButton(btn, !wasLiked, optimisticCount);
+
+        try {
+            const result   = await api.toggleLike(postId);
+            const newCount = parseInt(result);
+            post.likesCount = isNaN(newCount) ? optimisticCount : newCount;
+
+            if (wasLiked) this.likedPostIds.delete(postId);
+            else          this.likedPostIds.add(postId);
+
             const isLiked = this.likedPostIds.has(postId);
 
-            // Обновляем только кнопку — без перерендера страницы
-            btn.setAttribute('class', `btn-like flex items-center gap-2 py-1.5 px-3 border-2 border-black transition-all ${
-                isLiked ? 'bg-red-500/30 border-red-500 text-red-400' : 'bg-[#222531] text-gray-400 hover:bg-red-500/20'
-            }`);
-            const svg = btn.querySelector('svg');
-            if (svg) svg.setAttribute('class', `w-5 h-5 ${isLiked ? 'fill-red-500 stroke-red-500' : 'fill-none stroke-current'}`);
-            const countSpan = btn.querySelector('.like-count');
-            if (countSpan) countSpan.textContent = String(post.likesCount);
+            // Обновляем кнопки в ленте (может быть несколько копий, если дублируется)
+            document.querySelectorAll<HTMLElement>(`.btn-like[data-id="${postId}"]`).forEach(b => {
+                this.updateLikeButton(b, isLiked, post.likesCount!);
+            });
 
-            // Обновляем детали если пост открыт
-            if (this.currentOpenedPostId === postId) this.openPostDetails(postId);
+            // Обновляем детали, если пост открыт
+            if (this.currentOpenedPostId === postId) {
+                const detailLikeCount = document.querySelector('#post-details-modal .like-count');
+                if (detailLikeCount) detailLikeCount.textContent = String(post.likesCount);
+            }
+
+            // Обновляем только счётчик статистики
+            const statLikes = document.getElementById('stat-likes');
+            if (statLikes) {
+                statLikes.textContent = String(DB.posts.reduce((s, p) => s + (p.likesCount ?? 0), 0));
+            }
         } catch (err: any) {
+            // Откат при ошибке
+            this.updateLikeButton(btn, wasLiked, post.likesCount ?? 0);
             alert(`Не удалось поставить лайк: ${err.message}`);
         }
+    }
+
+    private updateLikeButton(btn: HTMLElement, isLiked: boolean, count: number) {
+        btn.setAttribute('class', `btn-like flex items-center gap-2 py-1.5 px-3 border-2 border-black transition-all ${
+            isLiked ? 'bg-red-500/30 border-red-500 text-red-400' : 'bg-[#222531] text-gray-400 hover:bg-red-500/20'
+        }`);
+        const svg = btn.querySelector('svg');
+        if (svg) svg.setAttribute('class', `w-5 h-5 ${isLiked ? 'fill-red-500 stroke-red-500' : 'fill-none stroke-current'}`);
+        const countSpan = btn.querySelector('.like-count');
+        if (countSpan) countSpan.textContent = String(count);
     }
 
     // ─── ДЕТАЛИ ПОСТА ────────────────────────────────────────────────────────
@@ -663,18 +816,37 @@ export class BlogApp {
         try {
             const fresh = await api.getPostById(id);
             if (fresh) {
-                // Сохраняем imageUrl из кэша если сервер не вернул
-                const cachedImage = post?.imageUrl ?? getImageForPost(id);
+                const raw          = fresh as any;
+                const cachedImage  = post?.imageUrl ?? getImageForPost(id);
+                const authorLogin  =
+                    fresh.authorLogin || raw.author || raw.authorName || raw.login ||
+                    raw.username || raw.user?.login || raw.user?.username || raw.user?.name ||
+                    post?.authorLogin || 'Аноним';
+
+                let comments: any[] = [];
+                if (Array.isArray(fresh.comments)) comments = fresh.comments;
+                else if (Array.isArray(raw.commentsList)) comments = raw.commentsList;
+                const commentsCount = raw.commentsCount ?? raw.commentCount ?? raw.comments_count ?? null;
+                if (comments.length === 0 && typeof commentsCount === 'number' && commentsCount > 0) {
+                    comments = Array(commentsCount).fill({ id: 0, content: '', authorLogin: '' });
+                }
+
                 const merged: PostDTO = {
                     ...fresh,
-                    comments: fresh.comments ?? [],
+                    authorLogin,
+                    comments,
                     imageUrl: fresh.imageUrl ?? cachedImage ?? null,
                 };
+
                 const idx = DB.posts.findIndex(p => p.id === id);
                 if (idx !== -1) DB.posts[idx] = merged;
                 post = merged;
-                // Обновляем счётчик комментов в ленте сразу
+
                 this.updateCommentCountBadge(id, merged.comments.length);
+                const statComments = document.getElementById('stat-comments');
+                if (statComments) {
+                    statComments.textContent = String(DB.posts.reduce((s, p) => s + (p.comments?.length ?? 0), 0));
+                }
             }
         } catch { /* используем кэш */ }
 
@@ -683,22 +855,19 @@ export class BlogApp {
         const detailTitle   = document.getElementById('detail-title');
         const detailAuthor  = document.getElementById('detail-author');
         const detailContent = document.getElementById('detail-content');
-
-        if (detailTitle) detailTitle.textContent   = post.title || '';
-        if (detailAuthor) detailAuthor.textContent = `Автор: ${post.authorLogin || 'Аноним'}`;
+        if (detailTitle)   detailTitle.textContent   = post.title || '';
+        if (detailAuthor)  detailAuthor.textContent  = `Автор: ${post.authorLogin}`;
         if (detailContent) detailContent.textContent = post.content || '';
 
-        // Картинка в деталях — через DOM а не innerHTML чтобы base64 работал
         const detailImageContainer = document.getElementById('detail-image-container');
         let detailImage = document.getElementById('detail-image') as HTMLImageElement | null;
-
         if (detailImageContainer) {
             if (post.imageUrl) {
                 if (!detailImage) {
-                    detailImage = document.createElement('img');
-                    detailImage.id = 'detail-image';
+                    detailImage         = document.createElement('img');
+                    detailImage.id      = 'detail-image';
                     detailImage.className = 'w-full max-h-96 object-cover';
-                    detailImage.alt = 'post image';
+                    detailImage.alt     = 'post image';
                     detailImageContainer.innerHTML = '';
                     detailImageContainer.appendChild(detailImage);
                 }
@@ -726,10 +895,9 @@ export class BlogApp {
         (document.getElementById('post-details-modal') as HTMLDialogElement).showModal();
     }
 
-    /** Обновить бейдж 💬 N в ленте без полного перерендера */
     private updateCommentCountBadge(postId: number, count: number) {
-        const badge = document.querySelector(`.comment-count-badge[data-post-id="${postId}"]`);
-        if (badge) badge.textContent = `💬 ${count}`;
+        document.querySelectorAll(`.comment-count-badge[data-post-id="${postId}"]`)
+            .forEach(b => b.textContent = `💬 ${count}`);
     }
 
     private renderComments(postId: number) {
@@ -737,9 +905,9 @@ export class BlogApp {
         if (!list) return;
         list.innerHTML = '';
 
-        const post = DB.posts.find(p => p.id === postId);
+        const post     = DB.posts.find(p => p.id === postId);
         const comments = post?.comments ?? [];
-        const isAdmin = this.currentUser?.role === 'admin';
+        const isAdmin  = this.currentUser?.role === 'admin';
 
         if (comments.length === 0) {
             list.innerHTML = '<p class="text-gray-400 italic text-xs uppercase font-bold">Комментариев пока нет.</p>';
@@ -754,7 +922,7 @@ export class BlogApp {
                     <span class="font-black text-xs text-lime-400 block mb-1 uppercase">${c.authorLogin ?? 'Аноним'}:</span>
                     <span class="text-gray-200 text-sm">${c.content ?? ''}</span>
                 </section>
-                ${isAdmin ? `<button class="btn-delete-comment text-[10px] font-black px-2 py-1 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white" data-id="${c.id}">✕</button>` : ''}
+                ${isAdmin ? `<button type="button" class="btn-delete-comment text-[10px] font-black px-2 py-1 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white" data-id="${c.id}">✕</button>` : ''}
             `;
             list.appendChild(sec);
         });
@@ -780,7 +948,7 @@ export class BlogApp {
         if (!this.currentUser || !this.currentOpenedPostId) return;
 
         const input = document.getElementById('comment-input') as HTMLInputElement;
-        const text = input.value.trim();
+        const text  = input.value.trim();
         if (!text) return;
 
         try {
@@ -794,12 +962,14 @@ export class BlogApp {
             if (post) {
                 if (!post.comments) post.comments = [];
                 post.comments.push(serverComment);
-                // Обновляем счётчик в ленте без перерендера
                 this.updateCommentCountBadge(this.currentOpenedPostId, post.comments.length);
+                const statComments = document.getElementById('stat-comments');
+                if (statComments) {
+                    statComments.textContent = String(DB.posts.reduce((s, p) => s + (p.comments?.length ?? 0), 0));
+                }
             }
 
             input.value = '';
-            // Только перерисовываем список комментов — никакого обновления страницы
             this.renderComments(this.currentOpenedPostId);
         } catch (err: any) {
             alert(`Ошибка отправки: ${err.message}`);
@@ -815,19 +985,20 @@ export class BlogApp {
         (document.getElementById('edit-post-id') as HTMLInputElement).value    = id.toString();
         (document.getElementById('post-title') as HTMLInputElement).value      = post.title || '';
         (document.getElementById('post-content') as HTMLTextAreaElement).value = post.content || '';
+        const catInput = document.getElementById('post-category') as HTMLInputElement;
+        if (catInput) catInput.value = post.categoryName || '';
         const t = document.getElementById('post-modal-title');
         if (t) t.textContent = 'Редактировать пост';
-        // Показываем существующую картинку в превью
         if (post.imageUrl) {
-            const preview = document.getElementById('image-preview') as HTMLImageElement | null;
+            const preview   = document.getElementById('image-preview') as HTMLImageElement | null;
             const container = document.getElementById('image-preview-container');
             if (preview && container) {
                 preview.src = post.imageUrl;
                 container.classList.remove('hidden-el');
             }
-        } else {
-            this.clearImagePreview();
-        }
+        } else { this.clearImagePreview(); }
+        this.fillCategoryDatalist();
+        this.renderTagSelector();
         (document.getElementById('post-modal') as HTMLDialogElement).showModal();
     }
 
@@ -844,7 +1015,8 @@ export class BlogApp {
         try {
             await api.deletePost(id);
             this.markPostDeleted(id);
-            this.renderPosts();
+            document.querySelector(`article[data-post-id="${id}"]`)?.remove();
+            this.updateBlogStats();
             this.updateProfileStats();
         } catch (err: any) { alert(`Ошибка: ${err.message}`); }
     }
@@ -853,14 +1025,14 @@ export class BlogApp {
         e.preventDefault();
         if (!this.currentUser) return;
 
-        const title     = (document.getElementById('post-title') as HTMLInputElement).value.trim();
-        const content   = (document.getElementById('post-content') as HTMLTextAreaElement).value.trim();
-        const editId    = (document.getElementById('edit-post-id') as HTMLInputElement).value;
-        const imageFile = (document.getElementById('post-image') as HTMLInputElement).files?.[0];
+        const title         = (document.getElementById('post-title') as HTMLInputElement).value.trim();
+        const content       = (document.getElementById('post-content') as HTMLTextAreaElement).value.trim();
+        const editId        = (document.getElementById('edit-post-id') as HTMLInputElement).value;
+        const imageFile     = (document.getElementById('post-image') as HTMLInputElement).files?.[0];
+        const categoryInput = (document.getElementById('post-category') as HTMLInputElement)?.value.trim() ?? '';
 
         if (!title || !content) { alert('Заполните заголовок и текст'); return; }
 
-        // Конвертируем картинку в base64 если выбрана
         let imageUrl: string | null = null;
         if (imageFile) {
             try { imageUrl = await api.fileToDataUrl(imageFile); }
@@ -869,57 +1041,160 @@ export class BlogApp {
 
         try {
             if (editId) {
-                // Редактирование
                 const id   = parseInt(editId);
                 const post = DB.posts.find(p => p.id === id);
-                const updated = await api.updatePost(id, {
-                    title,
-                    content,
-                    categoryid: String((post as any)?.categoryid ?? 1),
-                    imageUrl
-                });
+
+                let updated: any = null;
+                try {
+                    updated = await api.updatePost(id, {
+                        title,
+                        content,
+                        categoryid: String((post as any)?.categoryid ?? 1),
+                        imageUrl
+                    });
+                } catch (apiErr) {
+                    console.warn('⚠️ updatePost вернул ошибку, обновляем локально:', apiErr);
+                }
+
                 if (post) {
-                    post.title   = updated.title   || title;
-                    post.content = updated.content || content;
+                    post.title   = updated?.title   ?? title;
+                    post.content = updated?.content ?? content;
+                    if (categoryInput) post.categoryName = categoryInput;
                     if (imageUrl) {
                         post.imageUrl = imageUrl;
                         saveImageForPost(id, imageUrl);
                     }
+                    // Обновляем карточку в DOM без перерендера
+                    const article = document.querySelector(`article[data-post-id="${id}"]`);
+                    if (article) {
+                        const titleEl = article.querySelector('h3');
+                        if (titleEl) titleEl.textContent = post.title;
+                        const contentEl = article.querySelector('section.mb-4 p');
+                        if (contentEl) contentEl.textContent = post.content;
+                        if (imageUrl) {
+                            let img = article.querySelector('img.h-52') as HTMLImageElement | null;
+                            if (!img) {
+                                img           = document.createElement('img');
+                                img.className = 'w-full h-52 object-cover mb-4 border-2 border-black';
+                                img.alt       = 'post image';
+                                const cs      = article.querySelector('section.mb-4');
+                                if (cs) article.insertBefore(img, cs);
+                            }
+                            img.src = imageUrl;
+                        }
+                    }
                 }
             } else {
-                // Создание — пост добавляем в НАЧАЛО (unshift)
                 const newPost = await api.createPost({ title, content, categoryid: 1, imageUrl });
 
-                // Убираем из deletedIds если вдруг совпал id
                 if (this.deletedPostIds.has(newPost.id)) {
                     this.deletedPostIds.delete(newPost.id);
                     saveDeletedIds(this.deletedPostIds);
                 }
 
-                // Сохраняем картинку в localStorage чтобы не терялась при перезагрузке
                 const finalImageUrl = imageUrl ?? newPost.imageUrl ?? null;
-                if (finalImageUrl && newPost.id) {
-                    saveImageForPost(newPost.id, finalImageUrl);
-                }
+                if (finalImageUrl && newPost.id) saveImageForPost(newPost.id, finalImageUrl);
 
-                DB.posts.unshift({
+                const postData: PostDTO = {
                     ...newPost,
                     title:        newPost.title        ?? title,
                     content:      newPost.content      ?? content,
                     comments:     newPost.comments     ?? [],
                     likesCount:   newPost.likesCount   ?? 0,
                     authorLogin:  newPost.authorLogin  ?? this.currentUser!.username,
-                    categoryName: newPost.categoryName ?? null,
+                    categoryName: categoryInput || (newPost.categoryName ?? null),
                     imageUrl:     finalImageUrl,
-                });
+                };
+
+                DB.posts.unshift(postData);
+
+                const feed = document.getElementById('posts-feed');
+                if (feed) this.renderSinglePostCard(postData, feed, true);
             }
 
             (document.getElementById('post-modal') as HTMLDialogElement).close();
             this.clearImagePreview();
-            this.renderPosts();
-            this.updateProfileStats(); // ← обновляем счётчик постов в профиле сразу
+            this.updateBlogStats();
+            this.updateProfileStats();
+            this.renderCategories(); // обновляем теги в сайдбаре если добавили новую категорию
         } catch (err: any) {
             alert(`Ошибка сохранения: ${err.message}`);
         }
+    }
+
+    private renderSinglePostCard(post: PostDTO, feed: HTMLElement, prepend = false) {
+        const isAdmin       = this.currentUser?.role === 'admin';
+        const isLiked       = this.likedPostIds.has(post.id);
+        const commentsCount = Array.isArray(post.comments) ? post.comments.length : 0;
+
+        const article     = document.createElement('article');
+        article.className = 'w-full bg-[#1a1c23] border-3 border-black text-white p-6 shadow-[6px_6px_0px_#000] hover:shadow-[8px_8px_0px_#bef264] transition-all duration-150 cursor-pointer group';
+        article.dataset.postId = String(post.id);
+
+        article.addEventListener('click', (e) => {
+            if (!(e.target as HTMLElement).closest('button, .category-badge')) {
+                this.openPostDetails(post.id);
+            }
+        });
+
+        const categoryBadgeHtml = post.categoryName ? `
+            <section class="mb-4 flex flex-wrap gap-2">
+                <span class="category-badge text-[11px] px-2.5 py-1 font-bold border border-black cursor-pointer transition-colors bg-[#222531] text-gray-300 hover:text-black hover:bg-lime-400" data-category="${post.categoryName}">${post.categoryName}</span>
+            </section>` : '';
+
+        article.innerHTML = `
+            <header class="flex justify-between items-start mb-3">
+                <section>
+                    <h3 class="text-xl font-[950] uppercase text-white tracking-tight group-hover:text-lime-400 transition-colors">${post.title || ''}</h3>
+                    <span class="text-xs font-bold text-gray-400">Автор: <span class="text-lime-400">${post.authorLogin || 'Аноним'}</span></span>
+                </section>
+                ${isAdmin ? `
+                    <section class="flex gap-2 shrink-0 ml-4">
+                        <button type="button" class="text-indigo-400 hover:text-indigo-300 text-sm font-semibold p-1 btn-edit" data-id="${post.id}">Ред.</button>
+                        <button type="button" class="text-red-500 hover:text-red-300 text-sm font-semibold p-1 btn-delete" data-id="${post.id}">Удалить</button>
+                    </section>` : ''}
+            </header>
+            ${categoryBadgeHtml}
+            <section class="mb-4"><p class="text-gray-300 line-clamp-3 leading-relaxed text-sm font-medium">${post.content || ''}</p></section>
+            <footer class="flex items-center gap-4 border-t border-black pt-4">
+                <button type="button" class="btn-like flex items-center gap-2 py-1.5 px-3 border-2 border-black transition-all bg-[#222531] text-gray-400 hover:bg-red-500/20" data-id="${post.id}">
+                    <svg class="w-5 h-5 fill-none stroke-current" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                    </svg>
+                    <span class="font-black text-sm like-count">${post.likesCount ?? 0}</span>
+                </button>
+                <span class="text-xs text-gray-500 font-bold comment-count-badge" data-post-id="${post.id}">💬 ${commentsCount}</span>
+            </footer>
+        `;
+
+        if (post.imageUrl) {
+            const img     = document.createElement('img');
+            img.src       = post.imageUrl.startsWith('data:') ? post.imageUrl : 'http://localhost:8083' + post.imageUrl;
+            img.alt       = 'post image';
+            img.className = 'w-full h-52 object-cover mb-4 border-2 border-black';
+            const cs      = article.querySelector('section.mb-4');
+            if (cs) article.insertBefore(img, cs);
+        }
+
+        if (prepend && feed.firstChild) feed.insertBefore(article, feed.firstChild);
+        else feed.appendChild(article);
+
+        article.querySelector('.btn-like')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.toggleLike(e);
+        });
+        if (isAdmin) {
+            article.querySelector('.btn-delete')?.addEventListener('click', (e) => { e.stopPropagation(); this.deletePost(e); });
+            article.querySelector('.btn-edit')?.addEventListener('click',   (e) => { e.stopPropagation(); this.openEditModal(e); });
+        }
+        article.querySelectorAll('.category-badge').forEach(badge =>
+            badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cat = (e.currentTarget as HTMLElement).dataset.category!;
+                this.selectedCategory = this.selectedCategory?.toLowerCase() === cat.toLowerCase() ? null : cat;
+                this.renderPosts();
+                this.renderCategories();
+            }));
     }
 }
